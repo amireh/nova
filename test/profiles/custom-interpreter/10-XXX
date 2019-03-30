@@ -1,0 +1,7 @@
+#!/usr/bin/env python
+
+import os
+
+fd = os.fdopen(3, 'w')
+fd.write("hi\n")
+fd.close()
