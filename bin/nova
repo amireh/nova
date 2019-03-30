@@ -3,53 +3,38 @@
 declare -g NOVA_DIR="${NOVA_DIR:-$HOME/.nova}"
 declare -a nova_program
 declare    nova_profile
-declare    nova_profile_dir
 
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    -p|--profile)
-      nova_profile="$2"
+nova-getopts() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -p|--profile)
+        if [[ -d $2 ]]; then
+          nova_profile="$2"
+        else
+          nova_profile="$NOVA_DIR/$2"
+        fi
 
-      if [[ -d $nova_profile ]]; then
-        nova_profile_dir="${nova_profile}"
-        nova_profile="$(basename "${nova_profile}")"
-      else
-        nova_profile_dir="$NOVA_DIR/profiles/$nova_profile"
-      fi
+        shift 2
+      ;;
 
-      shift 2
-    ;;
+      -h|--help)
+        echo -e "usage: nova [options] [--] [program...]"
+        echo -e ""
+        echo -e "  -p, --profile NAME  name or path to the profile to use"
+        echo -e "      --no-rc         do not use the .novarc file"
+        echo -e "  -h, --help          print this help listing"
+        echo -e
+        echo -e "report bugs to <https://github.com/amireh/nova>"
+        exit 0
+      ;;
 
-    -h)
-      echo -e "usage: nova [-p|--profile PATH]"
-      echo -e "            [--no-rc]"
-      echo -e "            [--]"
-      echo -e "            [program...]"
-      echo -e
-      echo -e "try --help for more information"
+      # forward rest of options to program:
+      --) shift 1; nova_program+=("$@"); break ;;
 
-      exit 0
-    ;;
-
-    -h|--help)
-      echo -e "usage: nova [options] [--] [program...]"
-      echo -e ""
-      echo -e "  -p, --profile NAME  name or path to the profile to use"
-      echo -e "      --no-rc         do not use the .novarc file"
-      echo -e "  -h, --help          print this help listing"
-      echo -e
-      echo -e "report bugs to <https://github.com/amireh/nova>"
-      exit 0
-    ;;
-
-    --) shift 1; nova_program+=("$@"); break ;;
-
-    *) nova_program+=("$1") ; shift 1 ;;
-  esac
-done
-
-nova-mktemp() {
-  mktemp --tmpdir -u nova.XXXXXXX
+      # program option:
+      *) nova_program+=("$1") ; shift 1 ;;
+    esac
+  done
 }
 
 nova-spawn() {
@@ -60,67 +45,38 @@ nova-spawn() {
   fi
 }
 
-nova-env() {
-  local var_file
+nova-exec() {
   local var_name
+  local envbuf=()
 
-  for file in "$nova_profile_dir"/*; do
+  for file in "$nova_profile"/*; do
     # skip files ending with ~ and skip directories
     if [[ $file =~ ~$ || -d $file ]]; then
       continue
     elif [[ $file == \*$ ]]; then
-      echo "nova: no files found in $nova_profile_dir" 1>&2
+      echo "nova: no files found in $nova_profile" 1>&2
       return 1
     fi
 
-    read -r var_file < <(basename "$file")
-    read -r var_name < <(echo "$var_file" | sed 's/^[0-9]*-//')
-
-    nova-spawn "$file" 3>&4 || {
+    read -r var_name < <(basename "$file" | sed 's/^[0-9]*-//')
+    read -r "$var_name" < <(nova-spawn "$file") || {
       echo "nova: unable to evaluate $var_name" 1>&2
       return 1
     }
 
-    # read the evaluated value
-    read -u 4 -r "${var_name?}" || {
-      echo "nova: unable to read from pipe -- $file" 1>&2
-      return 1
-    }
+    export "$var_name" || return $?
 
-    export "${var_name?}" || return $?
-
-    echo "${var_name}=${!var_name}" >&3 || return $?
+    envbuf+=("${var_name}=${!var_name}")
   done
+
+  envbuf="$(IFS=$'\n' ; echo "${envbuf[*]}")"
+
+  exec "$@" 3<<< "$envbuf"
 }
 
-nova-exec() {
-  local envfile
-  local envfilebuf
-  local envrc
-  local evalbuf
+nova-getopts "$@" || exit $?
 
-  read -r envfile < <(nova-mktemp)
-  read -r evalbuf < <(nova-mktemp)
-
-  mkfifo "$evalbuf" || return $?
-  exec 4<>"$evalbuf"
-  rm "$evalbuf"
-
-  nova-env 3>"$envfile"
-  envrc=$?
-
-  exec 4>&-
-
-  envfilebuf="$(cat "$envfile")" && rm "$envfile"
-
-  if [[ $envrc -ne 0 ]]; then
-    return $envrc
-  else
-    exec "$@" 3<<< "$envfilebuf"
-  fi
-}
-
-if [[ ! $nova_profile ]]; then
+if [[ ! -d $nova_profile ]]; then
   echo "nova: missing profile" 1>&2
   exit 1
 fi

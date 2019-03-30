@@ -1,1 +1,1 @@
-echo "http://localhost:8500" >&3
+echo "http://localhost:8500"

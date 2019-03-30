@@ -2,6 +2,7 @@
 
 import os
 
-fd = os.fdopen(3, 'w')
-fd.write("hi\n")
-fd.close()
+print("hi")
+# fd = os.fdopen(3, 'w')
+# fd.write("hi\n")
+# fd.close()
