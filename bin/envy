@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+declare -a envy_args
+declare -a envy_exec
+declare    envy_command
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help|help) envy_args+=("--help"); shift 1 ;;
+    --)
+        shift 1;
+        envy_command="envy-exec"
+        envy_exec+=("$@")
+        break
+    ;;
+    *) envy_command="envy-$1"; shift 1 ; break ;;
+  esac
+done
+
+if ! type -p "$envy_command" 1>/dev/null; then
+  echo "$0: unknown command \"$1\"" 1>&2
+  exit 1
+fi
+
+ENVY_CACHE_DIR="${ENVY_CACHE_DIR:-$HOME/.cache/envy}"
+
+mkdir -p "$ENVY_CACHE_DIR" || {
+  echo "$0: unable to create cache directory -- $ENVY_CACHE_DIR" 1>&2
+  exit 1
+}
+
+if [[ -z $ENVY_DIR ]]; then
+  ENVY_DIR="$(dirname "$(dirname "$(realpath "${BASH_SOURCE[@]}")")")/env.d" || {
+    echo "$0: ENVY_DIR must be set" 1>&2
+    exit 1
+  }
+fi
+
+ENVY_CACHE_DIR="$ENVY_CACHE_DIR" \
+ENVY_DIR="$ENVY_DIR" \
+exec "$envy_command" "$@"

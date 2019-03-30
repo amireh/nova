@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+rm -f "$ENVY_CACHE_DIR"/*
