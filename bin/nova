@@ -100,17 +100,68 @@ nova-env() {
 nova-exec() {
   local rc
   local envfile
+  local envfilebuf
+  # local envfilebuf=()
+  # local rc=0
+  local envvalbuf
 
   read -r envfile < <(nova-mktemp)
+  read -r envvalbuf < <(nova-mktemp)
 
-  nova-env-fd nova-env 3>"$envfile"
+  mkfifo "$envvalbuf"
+  exec 3<>"$envfile"
+  exec 4<>"$envvalbuf"
+  rm "$envvalbuf"
 
-  ( source /dev/fd/3 && "$@" ) 3<"$envfile"
+  nova-env
+  # "$@"
 
   rc=$?
-  rm "$envfile"
 
-  return $rc
+  exec 4>&-
+  exec 3>&-
+
+  # nova-env-fd nova-env 3>"$envfile"
+
+  # read -r envfilebuf < <(head -n2 <&3)
+
+  # while IFS=$'\n' read -u 3 -r var_statement; do
+  #   echo "nova: exporting $var_statement" 1>&2
+
+  #   envfilebuf+=("$var_statement")
+  #   export "${var_statement?}" || exit $?
+  # done < <(nova-env-fd nova-env)
+
+  # envfilebuf="$(nova-env-fd nova-env 3>&1)"
+  # nova-env-fd nova-env 3>"$envfile"
+
+  # echo "nova: exporting env" 1>&2
+  # echo "nova: envfilebuf=\"${envfilebuf[*]}\"" 1>&2
+  # exec 5<"$envfile"
+
+  # for item in $envfilebuf; do
+  #   echo "nova: exporting $var_statement" 1>&2
+  #   export "${var_statement?}" || exit $?
+  # done
+
+  # source "$envfile"
+  # while IFS=$'\n' read -r var_statement; do
+  #   echo "nova: exporting $var_statement" 1>&2
+  #   export "${var_statement?}" || exit $?
+  #   # envfilebuf+=("$var_statement")
+  # done < "$envfile" || exit $?
+
+  envfilebuf="$(cat "$envfile")"
+
+  rm -f "$envfile"
+
+  if [[ ! $rc ]]; then
+    return $rc
+  fi
+
+  # exec "$@" 3< <(printf "%s\n" "${envfilebuf[@]}")
+  exec "$@" 3<<< "$envfilebuf"
+  # exec "$@"
 }
 
 if [[ ${#nova_program} -eq 0 ]]; then
