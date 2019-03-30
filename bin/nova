@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 declare -g NOVA_DIR="${NOVA_DIR:-$HOME/.nova}"
-declare -a nova_args
 declare -a nova_program
 declare    nova_profile
 declare    nova_profile_dir
@@ -21,8 +20,30 @@ while [[ $# -gt 0 ]]; do
       shift 2
     ;;
 
-    -h|--help|help) nova_args+=("--help"); shift 1 ;;
+    -h)
+      echo -e "usage: nova [-p|--profile PATH]"
+      echo -e "            [--no-rc]"
+      echo -e "            [--]"
+      echo -e "            [program...]"
+      echo -e
+      echo -e "try --help for more information"
+
+      exit 0
+    ;;
+
+    -h|--help)
+      echo -e "usage: nova [options] [--] [program...]"
+      echo -e ""
+      echo -e "  -p, --profile NAME  name or path to the profile to use"
+      echo -e "      --no-rc         do not use the .novarc file"
+      echo -e "  -h, --help          print this help listing"
+      echo -e
+      echo -e "report bugs to <https://github.com/amireh/nova>"
+      exit 0
+    ;;
+
     --) shift 1; nova_program+=("$@"); break ;;
+
     *) nova_program+=("$1") ; shift 1 ;;
   esac
 done
@@ -31,36 +52,11 @@ nova-mktemp() {
   mktemp --tmpdir -u nova.XXXXXXX
 }
 
-nova-env-fd() {
-  local rc=0
-  local valbuf
-
-  read -r valbuf < <(nova-mktemp)
-
-  mkfifo "$valbuf"
-  exec 4<>"$valbuf"
-  rm "$valbuf"
-
-  "$@"
-
-  rc=$?
-
-  exec 4>&-
-
-  return $rc
-}
-
 nova-spawn() {
   if [[ -x $1 ]]; then
-    ( "$1" ) 3>&4 || {
-      echo "nova: unable to evaluate $var_name" 1>&2
-      return 1
-    }
+    "$1"
   else
-    ( "${SHELL:-bash}" "$1" ) 3>&4 || {
-      echo "nova: unable to evaluate $var_name" 1>&2
-      return 1
-    }
+    "${SHELL:-bash}" "$1"
   fi
 }
 
@@ -69,6 +65,7 @@ nova-env() {
   local var_name
 
   for file in "$nova_profile_dir"/*; do
+    # skip files ending with ~ and skip directories
     if [[ $file =~ ~$ || -d $file ]]; then
       continue
     elif [[ $file == \*$ ]]; then
@@ -76,93 +73,57 @@ nova-env() {
       return 1
     fi
 
-    var_file="$(basename "$file")"
-    var_name="$(echo "$var_file" | sed 's/^[0-9]*-//')"
-
-    export "${var_name?}" || return $?
+    read -r var_file < <(basename "$file")
+    read -r var_name < <(echo "$var_file" | sed 's/^[0-9]*-//')
 
     nova-spawn "$file" 3>&4 || {
       echo "nova: unable to evaluate $var_name" 1>&2
       return 1
     }
 
-    read -t 0.01 -u 4 -r "${var_name?}" || {
+    # read the evaluated value
+    read -u 4 -r "${var_name?}" || {
       echo "nova: unable to read from pipe -- $file" 1>&2
       return 1
     }
 
+    export "${var_name?}" || return $?
+
     echo "${var_name}=${!var_name}" >&3 || return $?
   done
-
-  return $rc
 }
 
 nova-exec() {
-  local rc
   local envfile
   local envfilebuf
-  # local envfilebuf=()
-  # local rc=0
-  local envvalbuf
+  local envrc
+  local evalbuf
 
   read -r envfile < <(nova-mktemp)
-  read -r envvalbuf < <(nova-mktemp)
+  read -r evalbuf < <(nova-mktemp)
 
-  mkfifo "$envvalbuf"
-  exec 3<>"$envfile"
-  exec 4<>"$envvalbuf"
-  rm "$envvalbuf"
+  mkfifo "$evalbuf" || return $?
+  exec 4<>"$evalbuf"
+  rm "$evalbuf"
 
-  nova-env
-  # "$@"
-
-  rc=$?
+  nova-env 3>"$envfile"
+  envrc=$?
 
   exec 4>&-
-  exec 3>&-
 
-  # nova-env-fd nova-env 3>"$envfile"
+  envfilebuf="$(cat "$envfile")" && rm "$envfile"
 
-  # read -r envfilebuf < <(head -n2 <&3)
-
-  # while IFS=$'\n' read -u 3 -r var_statement; do
-  #   echo "nova: exporting $var_statement" 1>&2
-
-  #   envfilebuf+=("$var_statement")
-  #   export "${var_statement?}" || exit $?
-  # done < <(nova-env-fd nova-env)
-
-  # envfilebuf="$(nova-env-fd nova-env 3>&1)"
-  # nova-env-fd nova-env 3>"$envfile"
-
-  # echo "nova: exporting env" 1>&2
-  # echo "nova: envfilebuf=\"${envfilebuf[*]}\"" 1>&2
-  # exec 5<"$envfile"
-
-  # for item in $envfilebuf; do
-  #   echo "nova: exporting $var_statement" 1>&2
-  #   export "${var_statement?}" || exit $?
-  # done
-
-  # source "$envfile"
-  # while IFS=$'\n' read -r var_statement; do
-  #   echo "nova: exporting $var_statement" 1>&2
-  #   export "${var_statement?}" || exit $?
-  #   # envfilebuf+=("$var_statement")
-  # done < "$envfile" || exit $?
-
-  envfilebuf="$(cat "$envfile")"
-
-  rm -f "$envfile"
-
-  if [[ ! $rc ]]; then
-    return $rc
+  if [[ $envrc -ne 0 ]]; then
+    return $envrc
+  else
+    exec "$@" 3<<< "$envfilebuf"
   fi
-
-  # exec "$@" 3< <(printf "%s\n" "${envfilebuf[@]}")
-  exec "$@" 3<<< "$envfilebuf"
-  # exec "$@"
 }
+
+if [[ ! $nova_profile ]]; then
+  echo "nova: missing profile" 1>&2
+  exit 1
+fi
 
 if [[ ${#nova_program} -eq 0 ]]; then
   nova_program=("cat" "/dev/fd/3")

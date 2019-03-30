@@ -1,1 +1,2 @@
+echo "generating CONSUL_HTTP_DATACENTER"
 echo "prod" >&3

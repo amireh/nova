@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# Assert that a program exits with 0. If it doesn't, print a helpful message and
+# terminate this program as well as the parent program.
+#
+#     bb-assert MESSAGE PROG...
+#
+# Example:
+#
+#     bb-assert 'it runs the web server' \
+#       curl -s http://localhost
+#
+# To use it in a piped expression, make sure the call to bb-assert is right
+# before the last pipe:
+#
+#     docker logs ... |
+#       bb-assert 'it prints something' \
+#       ^^^^^^^^^
+#         grep something
+#         ^^^^^^^^^^^^^^
+
+msg="$1"
+
+shift 1
+
+( "$@" ) || {
+  echo "assertion error: $msg" 1>&2
+  kill -SIGUSR1 $PPID
+  exit 1
+}

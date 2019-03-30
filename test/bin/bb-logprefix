@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# Prefix output by some lead string.
+#
+#     bb-logprefix PREFIX PROG...
+#
+# Example:
+#
+#     bb-logprefix 'foo |' echo hi
+#     # => foo | hi
+#
+
+header="${1}"
+
+shift 1
+
+( "$@" ) 2>&1 | while IFS="" read -r line; do \
+  echo -e "$header $line"
+done
+
+exit "${PIPESTATUS[0]}"

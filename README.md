@@ -1,40 +1,37 @@
-# envy
+# nova
 
-Envy is a file-based environment variable manager. You create profiles of
-variables in the form of directories and files to switch between them based on
-the task at hand.
-
-How the values are computed is up to you; Envy merely delegates to your shell
-scripts.
+Nova is a file-based environment variable manager. Manage profiles of variables
+in the form of directories and files and switch between them. Values can be
+computed by scripts.
 
 ## Installation
 
-You could use the installer to download the `envy` binary to `~/.envy`:
+You could use the installer to download the `nova` binary to `~/.nova`:
 
-    wget -O- https://github.com/amireh/envy/master/envy-installer | bash
+    wget -O- https://github.com/amireh/nova/master/nova-installer | bash
 
 Or you could do it manually with Git:
 
 ```bash
-git clone https://github.com/amireh/envy ~/.envy &&
-echo 'export PATH="$HOME/.envy/bin:$PATH"' >> ~/.profile
+git clone https://github.com/amireh/nova ~/.nova &&
+echo 'export PATH="$HOME/.nova/bin:$PATH"' >> ~/.profile
 ```
 
-If you choose to install Envy in a place other than `~/.envy`, export `ENVY_DIR`
+If you choose to install Nova in a place other than `~/.nova`, export `ENVY_DIR`
 accordingly.
 
 Remember to restart your shell to reflect the change to `PATH`.
 
 ## Usage
 
-    envy [-p|--profile FILENAME]
+    nova [-p|--profile FILENAME]
          [-e|--extra-file FILE]         
          [--no-rc]
          [--]
          [program...]
 
 A profile must be specified either on the command-line with `-p` or `--profile`
-or in an RC file. When it is not specified, or does not exist, Envy exits with
+or in an RC file. When it is not specified, or does not exist, Nova exits with
 1.
 
 ### `-p|--profile FILENAME`
@@ -54,16 +51,16 @@ Precedence goes to:
 
 ### `--no-rc`
 
-Do not look for and use the `.envyrc` file.
+Do not look for and use the `.novarc` file.
 
 ### `--`
 
-Stop parsing Envy command-line parameters and forward to the program. Use this
-if an Envy parameter conflicts with a parameter of the program you want to run.
+Stop parsing Nova command-line parameters and forward to the program. Use this
+if an Nova parameter conflicts with a parameter of the program you want to run.
 
 ### `program...`
 
-The program to execute with the loaded profile. When omitted, Envy will print
+The program to execute with the loaded profile. When omitted, Nova will print
 the current profile values and exit with 0.
 
 `program` can be your shell program (like `bash`) if you want to drop into a
@@ -78,13 +75,13 @@ file descriptor `3`:
     echo my_value >&3
 
 Files are evaluated by lexicographical order -- you can control their evaluation
-order by prefixing their names with digits followed by a dash (`-`) and Envy
+order by prefixing their names with digits followed by a dash (`-`) and Nova
 will strip that prefix from the variable name.
 
 In the following example profile, the scripts for `VAULT_TOKEN` and
 `CONSUL_HTTP_TOKEN` will have access to the values of the variables before them:
 
-    .envy
+    .nova
     └── profiles
         └── default
             ├── 10-CONSUL_HTTP_ADDR
@@ -99,9 +96,9 @@ To disable a variable without removing its file, suffix its filename with tilde
 
 ## Working directory options
 
-Envy will look for a file named `.envyrc` starting from the current directory
+Nova will look for a file named `.novarc` starting from the current directory
 (`$PWD`) all the way up to the root folder. When present, that file may contain
-command-line options for Envy such as `--profile`.
+command-line options for Nova such as `--profile`.
 
 You can disable this behavior by passing `--no-rc`.
 
@@ -112,11 +109,11 @@ as `tar` to share them with others.
 
 For example, to share the profile `abc` with someone, I would first archive it:
 
-    tar -C ~/.envy -cf ~/envy-abc.tar ./profiles/abc
+    tar -C ~/.nova -cf ~/nova-abc.tar ./profiles/abc
 
 Then upload it somewhere, ask the person to download it and to install it as
 such:
 
-    tar -C "${ENVY_DIR:-$HOME/.envy}" -xf envy-abc.tar
+    tar -C "${ENVY_DIR:-$HOME/.nova}" -xf nova-abc.tar
 
 [dotenv]: https://github.com/motdotla/dotenv

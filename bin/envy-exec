@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-while IFS=$'\n' read -r var_statement; do
-  export "${var_statement?}" || exit $?
-done < <(envy-env) || exit $?
-
-exec "$@"

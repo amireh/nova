@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+# Pick the next color from a pre-defined palette.
+#
+#    bb-colorize COLOR
+#
+# Example:
+#
+#     declare tty_color
+#     declare tty_reset="\033[0m"
+#
+#     for i in {0..3}; do
+#       tty_color="$(bb-colorize "$tty_color")"
+#
+#       echo -e "$tty_color hello! $tty_reset"
+#     done
+#
+
+declare color="$1"
+
+color_palette=(
+  "\033[31m" # red
+  "\033[32m" # green
+  "\033[33m" # yellow
+  "\033[34m" # blue
+  "\033[35m" # magenta
+  "\033[36m" # cyan
+)
+
+for color_index in "${!color_palette[@]}"; do
+  if [[ $color == "${color_palette[color_index]}" ]]; then
+    next_color_index=$(( color_index + 1 ))
+    break
+  fi
+done
+
+if [[ -z $next_color_index || $next_color_index -gt ${#color_palette} ]]; then
+  next_color_index=0
+fi
+
+echo "${color_palette[next_color_index]}"
