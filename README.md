@@ -21,19 +21,12 @@ machines and sharing them with others is easy.
 
 ## Installation
 
-You could use the installer to download the `nova` binary to `~/.nova`:
-
-    wget -O- https://github.com/amireh/nova/master/nova-installer | bash
-
-Or you could do it manually with Git:
+Download the `bin/nova` script to somewhere in your `$PATH`, or use Git:
 
 ```bash
 git clone https://github.com/amireh/nova ~/.nova &&
 echo 'export PATH="$HOME/.nova/bin:$PATH"' >> ~/.profile
 ```
-
-If you choose to install Nova in a place other than `~/.nova`, export `NOVA_DIR`
-accordingly.
 
 Remember to restart your shell to reflect the change to `PATH`.
 
@@ -49,7 +42,8 @@ A profile must be specified either on the command-line with `-p` or in the file
 
 ### `-p|--profile FILENAME`
 
-The name of the profile to use or a full path to it. Profiles are available in `$NOVA_DIR/profiles`.
+The name of the profile to use or a full path to it. Profiles are available in
+`$NOVA_DIR/profiles`.
 
 ### `-e|--extra-file FILE`
 
