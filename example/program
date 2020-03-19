@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+if [[ -z $FOO ]]; then
+  echo "$0: FOO is not set!!!" >&2
+  exit 1
+fi
+
+echo "FOO is set to $FOO"
