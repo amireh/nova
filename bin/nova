@@ -1,35 +1,86 @@
 #!/usr/bin/env bash
 
-declare -g NOVA_DIR="${NOVA_DIR:-$HOME/.nova}"
-declare -a nova_program
-declare    nova_profile
+#
+#                   /====\  ==\\
+#  file-based             \    \\
+# environment     /   /===||     ===\
+#    variable                      =||
+#     manager    /=====   NA     ===||
+#               ||====   NOVA
+#               |         VO        ||
+#                         AN       //
+#                \ //==       ====//
+#                  ||     ||      /
+#                  \\     \\
+#                     \==  \\==/
+#
 
+declare NOVA_DIR="${NOVA_DIR:-$HOME/.nova}"
+declare NOVA_NORC="${NOVA_NORC:-0}"
+declare NOVA_DEBUG="${NOVA_DEBUG:-0}"
+declare -a nova_program
+declare nova_profile
+declare nova_export
+
+# (...): Number
+nova() {
+  nova-getopts "$@"
+
+  # read profile from .novarc if not specified on the command-line:
+  if [[ -z $nova_profile && $NOVA_NORC != 1 ]]; then
+    read -r nova_profile < <(nova-read-rcprofile '.novarc')
+  fi
+
+  if [[ -z $nova_profile ]]; then
+    echo "nova: no profile specified; set with -p or in .novarc" 1>&2
+    return 1
+  fi
+
+  # try resolving from base dir if profile could not be located:
+  if [[ ! -d $nova_profile ]]; then
+    nova_profile="$NOVA_DIR/$nova_profile"
+  fi
+
+  if [[ ! -d $nova_profile ]]; then
+    echo "nova: profile not found -- ${nova_profile#$NOVA_DIR\/}" 1>&2
+    return 1
+  fi
+
+  nova-debuglog "nova: found profile -- $nova_profile"
+
+  # print loaded profile if no program was specified:
+  if [[ ${#nova_program} -eq 0 ]]; then
+    nova_program=("cat" "/dev/fd/3")
+  fi
+
+  nova-exec "${nova_program[@]}"
+}
+
+# (String...): void
 nova-getopts() {
   while [[ $# -gt 0 ]]; do
     case $1 in
-      -p|--profile)
-        if [[ -d $2 ]]; then
-          nova_profile="$2"
-        else
-          nova_profile="$NOVA_DIR/$2"
-        fi
-
-        shift 2
-      ;;
+      -p|--profile) nova_profile="$2" ; shift 2 ;;
+         --export) nova_export="1" ; shift 1 ;;
+         --no-rc) NOVA_NORC=1 ; shift 1 ;;
+         --debug) NOVA_DEBUG=1 ; shift 1 ;;
 
       -h|--help)
         echo -e "usage: nova [options] [--] [program...]"
-        echo -e ""
-        echo -e "  -p, --profile NAME  name or path to the profile to use"
+        echo -e
+        echo -e "  -p, --profile DIR   path to the profile to use"
         echo -e "      --no-rc         do not use the .novarc file"
+        echo -e "      --export        print export statements for variables"
+        echo -e "      --debug         print diagnostic information"
         echo -e "  -h, --help          print this help listing"
         echo -e
         echo -e "report bugs to <https://github.com/amireh/nova>"
+
         exit 0
       ;;
 
       # forward rest of options to program:
-      --) shift 1; nova_program+=("$@"); break ;;
+      --) shift 1 ; nova_program+=("$@") ; break ;;
 
       # program option:
       *) nova_program+=("$1") ; shift 1 ;;
@@ -37,6 +88,95 @@ nova-getopts() {
   done
 }
 
+# (String): String?
+nova-read-rcprofile() {
+  local rcfile
+  local profile
+
+  read -r rcfile < <(nova-find-rcfile "$1")
+
+  if [[ -f $rcfile ]]; then
+    read -r profile < "$rcfile"
+
+    profile="${profile//\$HOME/$HOME}"
+    profile="${profile//\$NOVA_DIR/$NOVA_DIR}"
+
+    nova-debuglog "nova: found .novarc file -- $rcfile"
+
+    # either absolute or __always__ relative to dir of rc file:
+    case "$profile" in
+      /*) echo "$profile" ;;
+       *) echo "$(dirname "$rcfile")/$profile" ;;
+    esac
+  fi
+}
+
+# (String): Path?
+nova-find-rcfile() {
+  local dir="$PWD"
+  local file="$1"
+
+  while [[ -r $dir ]]; do
+    if [[ -f $dir/$file ]]; then
+      exec echo "$dir/$file"
+    fi
+
+    read -r parent_dir < <(dirname "$dir")
+
+    if [[ $parent_dir == "$dir" ]]; then
+      break
+    fi
+
+    dir="$parent_dir"
+  done
+}
+
+# (...): Number
+nova-exec() {
+  local var_name
+  local var_value
+  local envbuf
+
+  for file in "$nova_profile"/*; do
+    # skip directories and skip files ending with ~:
+    if [[ ! -f $file || $file =~ ~$ ]]; then
+      continue
+    fi
+
+    # discard order bits (e.g. 10-) from variable name, which are there only to
+    # control the evaluation order:
+    read -r var_name < <(basename "$file" | sed 's/^[0-9]*-//')
+
+    if [[ -n ${!var_name} ]]; then
+      nova-debuglog "nova: $var_name is already set"
+      continue
+    fi
+
+    nova-debuglog "nova: evaluating $var_name"
+
+    var_value="$(nova-spawn "$file")" || {
+      echo "nova: unable to evaluate $var_name -- $file" 1>&2
+      return 1
+    }
+
+    export "$var_name=$var_value" || return $?
+
+    if [[ $nova_export ]]; then
+      envbuf="$envbuf"$'\n'"export ${var_name}=${!var_name}"
+    else
+      envbuf="$envbuf"$'\n'"${var_name}=${!var_name}"
+    fi
+  done
+
+  exec -- "$@" 3<<< "${envbuf:1}"
+  #            ^^^^          ^^
+  #            1             2
+  #
+  # (1) expose env set as a file on fd 3 (e.g., docker run --env-file=/dev/fd/3)
+  # (2) delete leading newline
+}
+
+# (Path): Number
 nova-spawn() {
   if [[ -x $1 ]]; then
     "$1"
@@ -45,44 +185,11 @@ nova-spawn() {
   fi
 }
 
-nova-exec() {
-  local var_name
-  local envbuf=()
-
-  for file in "$nova_profile"/*; do
-    # skip files ending with ~ and skip directories
-    if [[ $file =~ ~$ || -d $file ]]; then
-      continue
-    elif [[ $file == \*$ ]]; then
-      echo "nova: no files found in $nova_profile" 1>&2
-      return 1
-    fi
-
-    read -r var_name < <(basename "$file" | sed 's/^[0-9]*-//')
-    read -r "$var_name" < <(nova-spawn "$file") || {
-      echo "nova: unable to evaluate $var_name" 1>&2
-      return 1
-    }
-
-    export "$var_name" || return $?
-
-    envbuf+=("${var_name}=${!var_name}")
-  done
-
-  envbuf="$(IFS=$'\n' ; echo "${envbuf[*]}")"
-
-  exec "$@" 3<<< "$envbuf"
+# (String): void
+nova-debuglog() {
+  if [[ $NOVA_DEBUG == "1" ]]; then
+    echo "$1" 1>&2
+  fi
 }
 
-nova-getopts "$@" || exit $?
-
-if [[ ! -d $nova_profile ]]; then
-  echo "nova: missing profile" 1>&2
-  exit 1
-fi
-
-if [[ ${#nova_program} -eq 0 ]]; then
-  nova_program=("cat" "/dev/fd/3")
-fi
-
-nova-exec "${nova_program[@]}"
+nova "$@"

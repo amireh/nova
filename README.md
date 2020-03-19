@@ -1,8 +1,23 @@
 # nova
 
-Nova is a file-based environment variable manager. Manage profiles of variables
-in the form of directories and files and switch between them. Values can be
-computed by scripts.
+Nova is a __file-based__ environment variable manager. A logical group of
+variables is referred to as a _profile_ which can be evaluated by Nova to
+eventually land in your \[program's\] environment.
+
+A profile is a regular directory containing a file for each environment variable
+it provides:
+
+    test/profiles/default
+    ├── 10-CONSUL_HTTP_ADDR
+    ├── 10-CONSUL_HTTP_DATACENTER
+    └── 20-CONSUL_PATH
+
+Unlike `.env` files, the values of these variables are computed by scripts so
+they are not limited to static values.  Additionally, the order in which Nova
+evaluates the scripts can be controlled to compute dependent values.
+
+Because profiles are directories of files, syncing them between multiple
+machines and sharing them with others is easy.
 
 ## Installation
 
@@ -17,26 +32,24 @@ git clone https://github.com/amireh/nova ~/.nova &&
 echo 'export PATH="$HOME/.nova/bin:$PATH"' >> ~/.profile
 ```
 
-If you choose to install Nova in a place other than `~/.nova`, export `ENVY_DIR`
+If you choose to install Nova in a place other than `~/.nova`, export `NOVA_DIR`
 accordingly.
 
 Remember to restart your shell to reflect the change to `PATH`.
 
 ## Usage
 
-    nova [-p|--profile FILENAME]
-         [-e|--extra-file FILE]         
-         [--no-rc]
+    nova [-p|--profile DIR]
+         [--no-rc] [--debug] [--export]
          [--]
          [program...]
 
-A profile must be specified either on the command-line with `-p` or `--profile`
-or in an RC file. When it is not specified, or does not exist, Nova exits with
-1.
+A profile must be specified either on the command-line with `-p` or in the file
+`.novarc`. When it is not specified, or does not exist, Nova exits with 1.
 
 ### `-p|--profile FILENAME`
 
-The name of the profile to use. Profiles are available in `$ENVY_DIR/profiles`.
+The name of the profile to use or a full path to it. Profiles are available in `$NOVA_DIR/profiles`.
 
 ### `-e|--extra-file FILE`
 
@@ -68,7 +81,7 @@ shell with the profile loaded.
 
 ## Profiles
 
-A profile is a directory under `$ENVY_DIR/profiles` containing a shell script
+A profile is a directory under `$NOVA_DIR/profiles` containing a shell script
 for each environment variable. The script must print the value to the special
 file descriptor `3`:
 
@@ -114,6 +127,6 @@ For example, to share the profile `abc` with someone, I would first archive it:
 Then upload it somewhere, ask the person to download it and to install it as
 such:
 
-    tar -C "${ENVY_DIR:-$HOME/.nova}" -xf nova-abc.tar
+    tar -C "${NOVA_DIR:-$HOME/.nova}" -xf nova-abc.tar
 
 [dotenv]: https://github.com/motdotla/dotenv

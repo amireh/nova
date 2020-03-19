@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-nova -p test/profiles/default env |
+nova -p test/profiles/default --export |
   bb-assert "it exports variables" \
-    grep -c "CONSUL_HTTP_ADDR"
+    grep -Eq "^export CONSUL_HTTP_ADDR=http://localhost:8500$"
