@@ -60,6 +60,11 @@ Precedence goes to:
 
 Do not look for and use the `.novarc` file.
 
+### `-o|--override`
+
+Do not bail if an environment variable is already set, but instead override
+it with the profile value.
+
 ### `--`
 
 Stop parsing Nova command-line parameters and forward to the program. Use this
@@ -122,5 +127,16 @@ Then upload it somewhere, ask the person to download it and to install it as
 such:
 
     tar -C "${NOVA_DIR:-$HOME/.nova}" -xf nova-abc.tar
+
+## Changes
+
+### 1.1
+
+- Added option to override variables already present in the environment
+- Fixed a bug that was causing the env tempfile to behave as a pipe on Bash 5.1.
+  Temporary env file is now explicitly created as a file, as Bash 5.1+ may
+  now create here-docs as pipes instead of files. See note "c." in
+  http://git.savannah.gnu.org/cgit/bash.git/plain/NEWS?h=bash-5.1.
+- Nova version is now displayed in the help listing.
 
 [dotenv]: https://github.com/motdotla/dotenv

@@ -18,9 +18,11 @@
 declare NOVA_DIR="${NOVA_DIR:-$HOME/.nova}"
 declare NOVA_NORC="${NOVA_NORC:-0}"
 declare NOVA_DEBUG="${NOVA_DEBUG:-0}"
+declare NOVA_VERSION="1.1"
 declare -a nova_program
 declare nova_profile
 declare nova_export
+declare nova_override
 
 # (...): Number
 nova() {
@@ -61,6 +63,7 @@ nova-getopts() {
   while [[ $# -gt 0 ]]; do
     case $1 in
       -p|--profile) nova_profile="$2" ; shift 2 ;;
+      -o|--override) nova_override=1 ; shift 1 ;;
          --export) nova_export="1" ; shift 1 ;;
          --no-rc) NOVA_NORC=1 ; shift 1 ;;
          --debug) NOVA_DEBUG=1 ; shift 1 ;;
@@ -69,12 +72,13 @@ nova-getopts() {
         echo -e "usage: nova [options] [--] [program...]"
         echo -e
         echo -e "  -p, --profile DIR   path to the profile to use"
+        echo -e "  -o, --override      override existing variables"
         echo -e "      --no-rc         do not use the .novarc file"
         echo -e "      --export        print export statements for variables"
         echo -e "      --debug         print diagnostic information"
         echo -e "  -h, --help          print this help listing"
         echo -e
-        echo -e "report bugs to <https://github.com/amireh/nova>"
+        echo -e "report bugs to <https://github.com/amireh/nova> (version: $NOVA_VERSION)"
 
         exit 0
       ;;
@@ -136,6 +140,7 @@ nova-exec() {
   local var_name
   local var_value
   local envbuf
+  local envfile
 
   for file in "$nova_profile"/*; do
     # skip directories and skip files ending with ~:
@@ -149,7 +154,10 @@ nova-exec() {
 
     if [[ -n ${!var_name} ]]; then
       nova-debuglog "nova: $var_name is already set"
-      continue
+
+      if [[ ! $nova_override ]]; then
+        continue
+      fi
     fi
 
     nova-debuglog "nova: evaluating $var_name"
@@ -168,12 +176,14 @@ nova-exec() {
     fi
   done
 
-  exec -- "$@" 3<<< "${envbuf:1}"
-  #            ^^^^          ^^
-  #            1             2
-  #
-  # (1) expose env set as a file on fd 3 (e.g., docker run --env-file=/dev/fd/3)
-  # (2) delete leading newline
+  read -r envfile < <(mktemp -t nova.XXXXXX)
+
+  # expose env set as a file on fd 3 (e.g., docker run --env-file=/dev/fd/3)
+  exec 3<"$envfile"
+  echo -n "${envbuf:1}" > "$envfile"
+                 # ^^ delete leading newline
+  rm "$envfile"
+  exec -- "$@"
 }
 
 # (Path): Number
