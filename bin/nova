@@ -33,6 +33,10 @@ nova() {
     read -r nova_profile < <(nova-read-rcprofile '.novarc')
   fi
 
+  if [[ -z $nova_profile && -d $PWD/.nova ]]; then
+    nova_profile="$PWD/.nova"
+  fi
+
   if [[ -z $nova_profile ]]; then
     echo "nova: no profile specified; set with -p or in .novarc" 1>&2
     return 1
@@ -170,9 +174,9 @@ nova-exec() {
     export "$var_name=$var_value" || return $?
 
     if [[ $nova_export ]]; then
-      envbuf="$envbuf"$'\n'"export ${var_name}=${!var_name}"
+      envbuf="$envbuf"$'\n'"export ${var_name}='${!var_name}'"
     else
-      envbuf="$envbuf"$'\n'"${var_name}=${!var_name}"
+      envbuf="$envbuf"$'\n'"${var_name}='${!var_name}'"
     fi
   done
 
